@@ -216,7 +216,6 @@ def diff_feature(df):
 
     return df_out
 
-n_cpu       = 1                                    # number of parallel processes to use
 transform   = [['','rank_','ym_rank_'],[''],['']]   # feature transformations to apply
 
 # 5 different feature sets:
@@ -260,6 +259,15 @@ for li, lastk in enumerate([None,3,6]):
         print ('NaNs in S_ and P_ columns filled')
 
 
+        unique_customers    = df['customer_ID'].nunique()
+        n_customers         = len(unique_customers)
+        chunk_size          = 100_000  # Adjust based on your memory
+        n_chunks            = int(np.ceil(n_customers / chunk_size))
+
+        print(f"Total customers: {n_customers:,}")
+        print(f"Chunk size: {chunk_size:,}")
+        print(f"Total chunks: {n_chunks}")
+
         # Temporal windowing (set 4, 5)
         # Keep only the last `lastk` records per customer
         # eg if lastk=3, keep only the most recent 3 months of data per customer
@@ -277,11 +285,33 @@ for li, lastk in enumerate([None,3,6]):
         # eg a customer's S_1 values [10, 20, 15] would be transformed to [0.33, 1.0, 0.67]
         # This captures relative standing of each value within the customer's timeline
         if prefix == 'rank_':
-            print ('performing rank transformation per customer')
-            customer_IDs    = df['customer_ID'].values
-            df              = df.groupby('customer_ID')[num_features].rank(pct=True).add_prefix('rank_')
-            df.insert(0,'customer_ID',customer_IDs)
-            num_features    = [f'rank_{col}' for col in num_features]
+            print('performing rank transformation per customer')
+                        
+            print(f"Total customers: {n_customers:,}")
+            print(f"Processing in {n_chunks} chunks of {chunk_size:,} customers each")
+            
+            rank_chunks = []
+            
+            for i in range(0, n_customers, chunk_size):
+                chunk_idx = i // chunk_size + 1
+                chunk_customers = unique_customers[i:i+chunk_size]
+                df_chunk = df[df['customer_ID'].isin(chunk_customers)].copy()
+                
+                print(f"Ranking chunk {chunk_idx}/{n_chunks}: {len(chunk_customers):,} customers, {len(df_chunk):,} rows")
+                
+                # Perform rank transformation on this chunk
+                ranked_chunk = df_chunk.groupby('customer_ID')[num_features].rank(pct=True).add_prefix('rank_')
+                rank_chunks.append(ranked_chunk)
+                
+                del df_chunk, ranked_chunk
+                gc.collect()
+            
+            print("Concatenating ranked chunks...")
+            df = pd.concat(rank_chunks, ignore_index=False)
+            del rank_chunks
+            gc.collect()
+            
+            print(f"Rank transformation completed: shape {df.shape}")
 
 
         # Year-month Rank Transformations (Set 3)
@@ -290,12 +320,33 @@ for li, lastk in enumerate([None,3,6]):
         # then their ym_rank_S_1 values would be [0.33, 1.0, 0.67] respectively
         # Captures how a customer compares to others in that specific month
         if prefix == 'ym_rank_':
-            print ('performing year-month rank transformation across customers')
-            customer_IDs    = df['customer_ID'].values
-            df['ym']        = df['S_2'].apply(lambda x:x[:7])
-            df              = df.groupby('ym')[num_features].rank(pct=True).add_prefix('ym_rank_')
-            num_features    = [f'ym_rank_{col}' for col in num_features]
-            df.insert(0,'customer_ID',customer_IDs)
+            print('performing rank transformation per customer per year-month')
+                        
+            print(f"Total customers: {n_customers:,}")
+            print(f"Processing in {n_chunks} chunks of {chunk_size:,} customers each")
+            
+            rank_chunks = []
+            
+            for i in range(0, n_customers, chunk_size):
+                chunk_idx = i // chunk_size + 1
+                chunk_customers = unique_customers[i:i+chunk_size]
+                df_chunk = df[df['customer_ID'].isin(chunk_customers)].copy()
+                
+                print(f"Ranking chunk {chunk_idx}/{n_chunks}: {len(chunk_customers):,} customers, {len(df_chunk):,} rows")
+                
+                # Perform rank transformation on this chunk
+                ranked_chunk = df_chunk.groupby(['customer_ID','year_month'])[num_features].rank(pct=True).add_prefix('ym_rank_')
+                rank_chunks.append(ranked_chunk)
+                
+                del df_chunk, ranked_chunk
+                gc.collect()
+            
+            print("Concatenating ranked chunks...")
+            df = pd.concat(rank_chunks, ignore_index=False)
+            del rank_chunks
+            gc.collect()
+            
+            print(f"Rank transformation completed: shape {df.shape}")
 
 
         # One hot encoding (Set 1, 4)
@@ -308,15 +359,6 @@ for li, lastk in enumerate([None,3,6]):
 
         # Process in chunks to manage memory
         print("Processing in chunks...")
-
-        chunk_size = 100_000  # customers per chunk
-        unique_customers = df['customer_ID'].unique()
-        n_customers = len(unique_customers)
-
-        print(f"Total customers: {n_customers:,}")
-        print(f"Chunk size: {chunk_size:,}")
-        n_chunks = int(np.ceil(n_customers / chunk_size))
-        print(f"Total chunks: {n_chunks}")
 
         # Set 1, 4 - Categorical Features
         if prefix in ['','last3_']:
