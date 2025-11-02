@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import gc,os,random
 import time,datetime
 from tqdm import tqdm
-from multiprocessing import Pool as ThreadPool
+from multiprocessing.pool import ThreadPool
 
 import gc
 
@@ -324,22 +324,70 @@ for li, lastk in enumerate([None,3,6]):
         # Set 1, 4
         if prefix in ['','last3_']:
             # Create a dataframe for categorical features
-            print ('creating categorical features')
-            cat_feature_df = pd.concat(pool.map(cat_feature,tqdm(dfs,desc='cat_feature'))).reset_index(drop=True)
+            print('creating categorical features')
+            
+            cat_feature_results = []
+            for i, df_batch in enumerate(tqdm(dfs, desc='cat_feature')):
+                print(f"Processing batch {i+1}/{len(dfs)}")
+                result = cat_feature(df_batch)
+                cat_feature_results.append(result)
+                
+                # Clean up
+                del result
+                gc.collect()
+            
+            cat_feature_df = pd.concat(cat_feature_results, ignore_index=True)
+            
+            # Clean up
+            del cat_feature_results
+            gc.collect()
+            
             cat_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}cat_feature.feather')
-            print ('categorical features saved')
+            print('categorical features saved')
 
         # set 1, 2, 3, 4, 5
         if prefix in ['','last3_','last6_','rank_','ym_rank_']:
             print ('creating numerical features')
-            num_feature_df = pd.concat(pool.map(num_feature,tqdm(dfs,desc='num_feature'))).reset_index(drop=True)
+
+            num_feature_results = []
+            for i, df_batch in enumerate(tqdm(dfs, desc='num_feature')):
+                print(f"Processing batch {i+1}/{len(dfs)}")
+                result = num_feature(df_batch)
+                num_feature_results.append(result)
+                
+                # Clean up
+                del result
+                gc.collect()
+
+            num_feature_df = pd.concat(num_feature_results, ignore_index=True) 
+
+            # Clean up
+            del num_feature_results
+            gc.collect()
+
             num_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}num_feature.feather')
             print ('numerical features saved')
 
         # set 1, 4
         if prefix in ['','last3_']:
             print ('creating difference features')
-            diff_feature_df = pd.concat(pool.map(diff_feature,tqdm(dfs,desc='diff_feature'))).reset_index(drop=True)
+            
+            diff_feature_results = []
+            for i, df_batch in enumerate(tqdm(dfs, desc='diff_feature')):
+                print(f"Processing batch {i+1}/{len(dfs)}")
+                result = diff_feature(df_batch)
+                diff_feature_results.append(result)
+                
+                # Clean up
+                del result
+                gc.collect()
+            
+            diff_feature_df = pd.concat(diff_feature_results, ignore_index=True)
+
+            # Clean up
+            del diff_feature_results
+            gc.collect()
+
             diff_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}diff_feature.feather')
             print ('difference features saved')
 
