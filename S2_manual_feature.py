@@ -16,22 +16,79 @@ import time,datetime
 from tqdm import tqdm
 from multiprocessing import Pool as ThreadPool
 
+import gc
 
-def one_hot_encoding(df, cols, is_drop=True):
+def one_hot_encoding(df, cat_features, drop=False):
     """
     One-hot encode specified categorical columns in-place and return the augmented DataFrame.
     New columns are named with the prefix 'oneHot_' followed by the original column name.
-    If is_drop is True, the original categorical columns are dropped after encoding.
+    If drop is True, the original categorical columns are dropped after encoding.
     """
-    for col in cols:
-        print('one hot encoding:', col)
-        # Use pd.Series to ensure we preserve index alignment
-        dummies = pd.get_dummies(pd.Series(df[col]), prefix=f'oneHot_{col}')
-        df = pd.concat([df, dummies], axis=1)
-    if is_drop:
-        df.drop(cols, axis=1, inplace=True)
+    # First pass: get all unique categories across the entire dataset
+    print("Collecting unique categories...")
+    all_categories = {}
+    for col in cat_features:
+        all_categories[col] = df[col].unique()
+        print(f"  {col}: {len(all_categories[col])} unique values")
+    
+    # Process in chunks to avoid memory overflow
+    chunk_size = 1_000_000  # Process 1M rows at a time
+    n_chunks = int(np.ceil(len(df) / chunk_size))
+    
+    result_chunks = []
+    
+    for chunk_idx in range(n_chunks):
+        start_idx = chunk_idx * chunk_size
+        end_idx = min((chunk_idx + 1) * chunk_size, len(df))
+        
+        print(f"Processing chunk {chunk_idx + 1}/{n_chunks} (rows {start_idx:,} to {end_idx:,})")
+        
+        df_chunk = df.iloc[start_idx:end_idx].copy()
+        
+        for col in cat_features:
+            print(f"  one hot encoding: {col}")
+            
+            # Get dummies with ALL categories (not just ones in this chunk)
+            dummies = pd.get_dummies(
+                df_chunk[col], 
+                prefix=f'oneHot_{col}',
+                # dtype=np.float32,  # Use float32 to save memory
+                sparse=True        # Use sparse format for efficiency
+            )
+            
+            # Ensure all expected columns exist (fill missing with 0)
+            expected_cols = [f'oneHot_{col}_{cat}' for cat in all_categories[col]]
+            for expected_col in expected_cols:
+                if expected_col not in dummies.columns:
+                    dummies[expected_col] = 0
+            
+            # Keep only expected columns in correct order
+            dummies = dummies[expected_cols]
+            
+            # Concatenate
+            df_chunk = pd.concat([df_chunk, dummies], axis=1)
+            
+            if drop:
+                df_chunk.drop(col, axis=1, inplace=True)
+            
+            del dummies
+            gc.collect()
+        
+        result_chunks.append(df_chunk)
+        
+        # Clean up
+        del df_chunk
+        gc.collect()
+    
+    # Combine all chunks
+    print("Combining chunks...")
+    df = pd.concat(result_chunks, ignore_index=True)
+    
+    # Clean up
+    del result_chunks
+    gc.collect()
+    
     return df
-
 
 def cat_feature(df):
     """
