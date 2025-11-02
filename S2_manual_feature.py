@@ -1,32 +1,8 @@
 """
-S2_manual_feature.py
----------------------
-Feature engineering helpers used in the Kaggle American Express default predictionsolution. 
+This script performs manual feature engineering on the American Express Default Prediction dataset.
 
-This module contains functions for one-hot encoding categorical columns and aggregating features by `customer_ID` 
-so that each customer is represented by a single row of aggregated statistics. 
-
-The original script uses global variables such as `lastk`, `num_features`, and `cat_features` 
-which are set in the procedural section at the bottom of the file; 
-
-the functions here operate on a DataFrame fragment (typically one partition handled by a process pool) and return aggregated DataFrames.
-
-Notes / assumptions
-- Input DataFrame must contain a `customer_ID` column.
-- `S_2` is treated specially for ordering (it's used to compute 'rank').
-- The functions rely on some global names (e.g. `num_features`, `cat_features`, and `lastk`) 
-  which are set in the calling scope in the original script. 
-  This keeps compatibility with the original code; you can also set these variables
-  in your own scope before calling the functions.
-
-The module exports the following functions:
-- one_hot_encoding(df, cols, is_drop=True)
-- cat_feature(df) 
-- num_feature(df)
-- diff_feature(df)
-
-Each function includes a usage example in the docstring that shows a small
-input and the expected schema/shape of the output.
+9 different feature sets are created by varying the temporal window (full history vs last 3 or 6 months)
+    and applying rank-based transformations.
 """
 
 import warnings
@@ -43,22 +19,9 @@ from multiprocessing import Pool as ThreadPool
 
 def one_hot_encoding(df, cols, is_drop=True):
     """
-    Perform one-hot encoding on categorical columns and attach the new dummy columns to the provided DataFrame. 
-    New columns are prefixed with 'oneHot_<original_col_name>_'. 
-    The original columns are optionally dropped.
-
-    Parameters
-    - df: pandas.DataFrame
-        Input DataFrame containing the categorical columns and a `customer_ID`.
-    - cols: list[str]
-        List of column names in `df` to one-hot encode.
-    - is_drop: bool, default True
-        If True, drop the original categorical columns after creating dummies.
-
-    Returns
-    - pandas.DataFrame
-        The input DataFrame with new one-hot columns appended (and optionally
-        original categorical columns removed).
+    One-hot encode specified categorical columns in-place and return the augmented DataFrame.
+    New columns are named with the prefix 'oneHot_' followed by the original column name.
+    If is_drop is True, the original categorical columns are dropped after encoding.
     """
     for col in cols:
         print('one hot encoding:', col)
@@ -72,48 +35,39 @@ def one_hot_encoding(df, cols, is_drop=True):
 
 def cat_feature(df):
     """
-    Aggregate categorical features (including one-hot encoded columns) by `customer_ID`.
+    For one hot encoded categorical features (with prefix 'oneHot_'), aggregate them by customer_ID using
+        - mean, std, sum, and last (if full history ie set 1, 2, 3)
+        - mean, std, sum (if lastk is set ie set 4, 5)
 
-    Behavior
-    - Finds columns containing 'oneHot' and aggregates them with ['mean','std', 'sum', 'last'] when global `lastk` is None (full history) 
-      or without 'last' when `lastk` is set (using a limited tail of records).
-    - Aggregates original categorical features (defined in the global `cat_features` list) with ['last', 'nunique'] when `lastk` is None, 
-      or ['nunique'] when `lastk` is set.
-    - Adds a count of records per `customer_ID` using the `S_2` column.
+    For original categorical features, aggregate them by customer_ID using
+        - last, nunique (if full history ie set 1, 2, 3)
+        - nunique (if lastk is set ie set 4, 5)  
 
-    Parameters
-    - df: pandas.DataFrame
-        A DataFrame slice containing rows for many customers. Must contain columns: 'customer_ID', 'S_2', 
-        one-hot columns (prefixed with 'oneHot_'), and the columns listed in `cat_features`.
+    Additionally, add a count of records per customer using the S_2 (date) column.
 
-    Returns
-    - pandas.DataFrame
-        Aggregated DataFrame indexed by `customer_ID` (as a regular column),
-        where column names are produced by joining the original column name and
-        aggregation function with an underscore (e.g. 'oneHot_cat_mean').
+    Return a DataFrame with aggregated categorical features per customer (one row per customer).
     """
     # collect one-hot encoded columns
     one_hot_features = [col for col in df.columns if 'oneHot' in col]
 
-    # Aggregate one-hot columns. If lastk is None (full history) include the
-    # 'last' aggregation to capture the most recent value per customer.
+    # Aggregate one-hot columns.
     if lastk is None:
         num_agg_df = df.groupby("customer_ID", sort=False)[one_hot_features].agg(['mean', 'std', 'sum', 'last'])
     else:
         num_agg_df = df.groupby("customer_ID", sort=False)[one_hot_features].agg(['mean', 'std', 'sum'])
-    # flatten multiindex columns produced by agg
+    # Flatten multi-level columns 
+    # eg ('oneHot_feature1', 'mean') -> 'oneHot_feature1_mean'
     num_agg_df.columns = ['_'.join(x) for x in num_agg_df.columns]
 
-    # Aggregate original categorical columns. 'last' is only meaningful when
-    # we keep full history (lastk is None).
+    # Aggregate original categorical columns. 
     if lastk is None:
         cat_agg_df = df.groupby("customer_ID", sort=False)[cat_features].agg(['last', 'nunique'])
     else:
         cat_agg_df = df.groupby("customer_ID", sort=False)[cat_features].agg(['nunique'])
     cat_agg_df.columns = ['_'.join(x) for x in cat_agg_df.columns]
 
-    # Add a record count per customer using S_2 (dates). The count is useful
-    # as a feature representing how many records (rows) each customer has.
+
+    # Add a record count per customer using S_2 (dates)
     count_agg_df = df.groupby("customer_ID", sort=False)[['S_2']].agg(['count'])
     count_agg_df.columns = ['_'.join(x) for x in count_agg_df.columns]
 
@@ -123,6 +77,7 @@ def cat_feature(df):
     print('cat feature shape after engineering', df_out.shape)
 
     return df_out
+
 
 def num_feature(df):
     """
@@ -140,34 +95,11 @@ def num_feature(df):
       by flooring division with 0.01: `val = val // 0.01`. This appears to be
       intended as a coarse quantization to reduce cardinality / memory.
 
-    Parameters
-    - df: pandas.DataFrame
-        Input slice with columns matching the global `num_features` list and a
-        `customer_ID` column.
-
-    Returns
-    - pandas.DataFrame
-        Aggregated numeric features per customer with flattened column names.
-
-    Example
-    >>> import pandas as pd
-    >>> df = pd.DataFrame({
-    ...    'customer_ID': ['A','A','B'],
-    ...    'num1': [1.0, 3.0, 2.0],
-    ...    'S_2': ['2020-01-01','2020-02-01','2020-01-01']
-    ... })
-    >>> global num_features, lastk
-    >>> num_features = ['num1']
-    >>> lastk = None
-    >>> out = num_feature(df)
-    >>> # one row per customer
-    >>> out.shape[0]
-    2
-
     """
     # When the features are already rank_* style we only keep the last value
     if num_features[0][:5] == 'rank_':
         num_agg_df = df.groupby("customer_ID", sort=False)[num_features].agg(['last'])
+        print('only last for rank features')
     else:
         if lastk is None:
             num_agg_df = df.groupby("customer_ID", sort=False)[num_features].agg(['mean', 'std', 'min', 'max', 'sum', 'last'])
@@ -187,6 +119,7 @@ def num_feature(df):
 
     return df_out
 
+
 def diff_feature(df):
     """
     Create features based on the difference between consecutive rows for each
@@ -200,30 +133,6 @@ def diff_feature(df):
       and optionally 'last' when `lastk` is None.
     - After aggregation the values are quantized by floor-division with 0.01
       to match the original script behaviour.
-
-    Parameters
-    - df: pandas.DataFrame
-        Input slice containing `customer_ID` and the numeric columns listed in
-        the global `num_features`.
-
-    Returns
-    - pandas.DataFrame
-        Aggregated difference features per customer, with flattened column
-        names like 'diff_num1_mean', 'diff_num1_last', etc.
-
-    Example
-    >>> import pandas as pd
-    >>> df = pd.DataFrame({
-    ...    'customer_ID': ['A','A','B'],
-    ...    'num1': [1.0, 3.0, 2.0],
-    ...    'S_2': ['2020-01-01','2020-02-01','2020-01-01']
-    ... })
-    >>> global num_features, lastk
-    >>> num_features = ['num1']
-    >>> lastk = None
-    >>> out = diff_feature(df)
-    >>> out.shape[0]
-    2
 
     """
     # names for the diffed columns (used after computing groupwise differences)
@@ -252,43 +161,95 @@ def diff_feature(df):
 
     return df_out
 
-n_cpu = 16
-transform = [['','rank_','ym_rank_'],[''],['']]
+
+n_cpu       = 5                                    # number of parallel processes to use
+transform   = [['','rank_','ym_rank_'],[''],['']]   # feature transformations to apply
+
+# 5 different feature sets:
+#   1. All data            (lastk=None), no transform      (prefix='')
+#   2. All data            (lastk=None), rank transform    (prefix='rank_')
+#   3. All data            (lastk=None), ym_rank transform (prefix='ym_rank_')
+#   4. Last 3 months data  (lastk=3)   , no transform      (prefix='last3_')
+#   5. Last 6 months data  (lastk=6)   , no transform      (prefix='last6_')
 
 for li, lastk in enumerate([None,3,6]):
     for prefix in transform[li]:
-        df = pd.read_feather(f'./input/train.feather').append(pd.read_feather(f'./input/test.feather')).reset_index(drop=True)
-        all_cols = [c for c in list(df.columns) if c not in ['customer_ID','S_2']]
-        cat_features = ["B_30","B_38","D_114","D_116","D_117","D_120","D_126","D_63","D_64","D_66","D_68"]
-        num_features = [col for col in all_cols if col not in cat_features]
+        # We iterate over each of the 5 feature sets
+        print ('----------------------------------------------------------------')
+        print (f'Processing feature set: prefix={prefix}, lastk={lastk}')
+        print ('----------------------------------------------------------------')
+
+        # Combine train and test data for feature engineering (both sets use same features)
+        df = pd.read_feather(f"S:/ML_Project/new_data/train_data.feather").append(pd.read_feather(f"S:/ML_Project/new_data/test_data.feather")).reset_index(drop=True)
+
+        print ('all df shape',df.shape)
+        
+        # Get the list of all columns, categorical features, and numerical feature names
+        all_cols        = [c for c in list(df.columns) if c not in ['customer_ID','S_2']]
+        cat_features    = ["B_30","B_38","D_114","D_116","D_117","D_120","D_126","D_63","D_64","D_66","D_68"]
+        num_features    = [col for col in all_cols if col not in cat_features]
+
+        print (f'all columns except ID and date: {len(all_cols)}')
+        print (f'categorical features: {len(cat_features)}')
+        print (f'numerical features: {len(num_features)}')
+
+        # Fill NaNs in 'S_' and 'P_' columns (except 'S_2' ie date) with 0
+        # S represent Spend variables, P represent Payment variables
+        # We can fill NaNs with 0 as no spend / no payment
         for col in [col for col in df.columns if 'S_' in col or 'P_' in col]:
             if col != 'S_2':
                 df[col] = df[col].fillna(0)
 
+        print ('NaNs in S_ and P_ columns filled')
+
+
+        # Temporal windowing (set 4, 5)
+        # Keep only the last `lastk` records per customer
+        # eg if lastk=3, keep only the most recent 3 months of data per customer
         if lastk is not None:
-            prefix = f'last{lastk}_' + prefix
-            print('all df shape',df.shape)
-            df['rank'] = df.groupby('customer_ID')['S_2'].rank(ascending=False)
-            df = df.loc[df['rank']<=lastk].reset_index(drop=True)
-            df = df.drop(['rank'],axis=1)
+            print (f'Temporal windowing: keeping last {lastk} records per customer')
+            prefix      = f'last{lastk}_' + prefix
+            df['rank']  = df.groupby('customer_ID')['S_2'].rank(ascending=False)    # rank the dates per customer (1 = most recent)
+            df          = df.loc[df['rank']<=lastk].reset_index(drop=True)          # keep only lastk records
+            df          = df.drop(['rank'],axis=1)                                  # drop the temporary rank column
             print(f'last {lastk} shape',df.shape)
 
+
+        # Rank transformations (Set 2)
+        # For each customer, convert all numeric features to their rank (percentile) within that customer's history
+        # eg a customer's S_1 values [10, 20, 15] would be transformed to [0.33, 1.0, 0.67]
+        # This captures relative standing of each value within the customer's timeline
         if prefix == 'rank_':
-            cids = df['customer_ID'].values
-            df = df.groupby('customer_ID')[num_features].rank(pct=True).add_prefix('rank_')
-            df.insert(0,'customer_ID',cids)
-            num_features = [f'rank_{col}' for col in num_features]
+            print ('performing rank transformation per customer')
+            customer_IDs    = df['customer_ID'].values
+            df              = df.groupby('customer_ID')[num_features].rank(pct=True).add_prefix('rank_')
+            df.insert(0,'customer_ID',customer_IDs)
+            num_features    = [f'rank_{col}' for col in num_features]
 
+
+        # Year-month Rank Transformations (Set 3)
+        # For each month, convert all numeric features to the rank (pecentile) across all customers within the same month
+        # eg for month 2020-01, if customer A has S_1=10, B has S_1=20, C has S_1=15
+        # then their ym_rank_S_1 values would be [0.33, 1.0, 0.67] respectively
+        # Captures how a customer compares to others in that specific month
         if prefix == 'ym_rank_':
-            cids = df['customer_ID'].values
-            df['ym'] = df['S_2'].apply(lambda x:x[:7])
-            df = df.groupby('ym')[num_features].rank(pct=True).add_prefix('ym_rank_')
-            num_features = [f'ym_rank_{col}' for col in num_features]
-            df.insert(0,'customer_ID',cids)
+            print ('performing year-month rank transformation across customers')
+            customer_IDs    = df['customer_ID'].values
+            df['ym']        = df['S_2'].apply(lambda x:x[:7])
+            df              = df.groupby('ym')[num_features].rank(pct=True).add_prefix('ym_rank_')
+            num_features    = [f'ym_rank_{col}' for col in num_features]
+            df.insert(0,'customer_ID',customer_IDs)
 
+
+        # One hot encoding (Set 1, 4)
+        # We are encoding all categorical features for these 2 sets
+        # The original categorical features are not dropped (we have both the original and one-hot columns)
         if prefix in ['','last3_']:
+            print ('performing one-hot encoding for categorical features')
             df = one_hot_encoding(df,cat_features,False)
 
+
+        # Split dataframe into n_cpu batches for parallel processing (1 CPU core per batch)
         vc = df['customer_ID'].value_counts(sort=False).cumsum()
         batch_size = int(np.ceil(len(vc) / n_cpu))
         dfs = []
@@ -300,17 +261,26 @@ for li, lastk in enumerate([None,3,6]):
 
         pool = ThreadPool(n_cpu)
 
+        # Set 1, 4
         if prefix in ['','last3_']:
+            # Create a dataframe for categorical features
+            print ('creating categorical features')
             cat_feature_df = pd.concat(pool.map(cat_feature,tqdm(dfs,desc='cat_feature'))).reset_index(drop=True)
+            cat_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}cat_feature.feather')
+            print ('categorical features saved')
 
-            cat_feature_df.to_feather(f'./input/{prefix}cat_feature.feather')
-
+        # set 1, 2, 3, 4, 5
         if prefix in ['','last3_','last6_','rank_','ym_rank_']:
+            print ('creating numerical features')
             num_feature_df = pd.concat(pool.map(num_feature,tqdm(dfs,desc='num_feature'))).reset_index(drop=True)
-            num_feature_df.to_feather(f'./input/{prefix}num_feature.feather')
+            num_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}num_feature.feather')
+            print ('numerical features saved')
 
+        # set 1, 4
         if prefix in ['','last3_']:
+            print ('creating difference features')
             diff_feature_df = pd.concat(pool.map(diff_feature,tqdm(dfs,desc='diff_feature'))).reset_index(drop=True)
-            diff_feature_df.to_feather(f'./input/{prefix}diff_feature.feather')
+            diff_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}diff_feature.feather')
+            print ('difference features saved')
 
         pool.close()
