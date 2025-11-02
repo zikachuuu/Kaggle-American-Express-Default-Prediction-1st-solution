@@ -305,36 +305,103 @@ for li, lastk in enumerate([None,3,6]):
             print ('performing one-hot encoding for categorical features')
             df = one_hot_encoding(df,cat_features,False)
 
-        # Set 1, 4
+
+        # Process in chunks to manage memory
+        print("Processing in chunks...")
+
+        chunk_size = 100_000  # customers per chunk
+        unique_customers = df['customer_ID'].unique()
+        n_customers = len(unique_customers)
+
+        print(f"Total customers: {n_customers:,}")
+        print(f"Chunk size: {chunk_size:,}")
+        n_chunks = int(np.ceil(n_customers / chunk_size))
+        print(f"Total chunks: {n_chunks}")
+
+        # Set 1, 4 - Categorical Features
         if prefix in ['','last3_']:
             print('creating categorical features')
-            cat_feature_df = cat_feature(df)
+            cat_results = []
+            
+            for i in range(0, n_customers, chunk_size):
+                chunk_idx = i // chunk_size + 1
+                chunk_customers = unique_customers[i:i+chunk_size]
+                df_chunk = df[df['customer_ID'].isin(chunk_customers)].copy()
+                
+                print(f"Processing cat_feature chunk {chunk_idx}/{n_chunks}: {len(chunk_customers):,} customers, {len(df_chunk):,} rows")
+                result = cat_feature(df_chunk)
+                cat_results.append(result)
+                
+                del df_chunk, result
+                gc.collect()
+            
+            print("Concatenating categorical feature results...")
+            cat_feature_df = pd.concat(cat_results, ignore_index=True)
+            del cat_results
+            gc.collect()
+            
             cat_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}cat_feature.feather')
-            print('categorical features saved')
+            print(f'categorical features saved: shape {cat_feature_df.shape}')
             del cat_feature_df
             gc.collect()
 
-        # set 1, 2, 3, 4, 5
+        # Set 1, 2, 3, 4, 5 - Numerical Features
         if prefix in ['','last3_','last6_','rank_','ym_rank_']:
             print('creating numerical features')
-            num_feature_df = num_feature(df)
+            num_results = []
+            
+            for i in range(0, n_customers, chunk_size):
+                chunk_idx = i // chunk_size + 1
+                chunk_customers = unique_customers[i:i+chunk_size]
+                df_chunk = df[df['customer_ID'].isin(chunk_customers)].copy()
+                
+                print(f"Processing num_feature chunk {chunk_idx}/{n_chunks}: {len(chunk_customers):,} customers, {len(df_chunk):,} rows")
+                result = num_feature(df_chunk)
+                num_results.append(result)
+                
+                del df_chunk, result
+                gc.collect()
+            
+            print("Concatenating numerical feature results...")
+            num_feature_df = pd.concat(num_results, ignore_index=True)
+            del num_results
+            gc.collect()
+            
             num_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}num_feature.feather')
-            print('numerical features saved')
+            print(f'numerical features saved: shape {num_feature_df.shape}')
             del num_feature_df
             gc.collect()
 
-        # set 1, 4
+        # Set 1, 4 - Difference Features
         if prefix in ['','last3_']:
             print('creating difference features')
-            diff_feature_df = diff_feature(df)
+            diff_results = []
+            
+            for i in range(0, n_customers, chunk_size):
+                chunk_idx = i // chunk_size + 1
+                chunk_customers = unique_customers[i:i+chunk_size]
+                df_chunk = df[df['customer_ID'].isin(chunk_customers)].copy()
+                
+                print(f"Processing diff_feature chunk {chunk_idx}/{n_chunks}: {len(chunk_customers):,} customers, {len(df_chunk):,} rows")
+                result = diff_feature(df_chunk)
+                diff_results.append(result)
+                
+                del df_chunk, result
+                gc.collect()
+            
+            print("Concatenating difference feature results...")
+            diff_feature_df = pd.concat(diff_results, ignore_index=True)
+            del diff_results
+            gc.collect()
+            
             diff_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}diff_feature.feather')
-            print('difference features saved')
+            print(f'difference features saved: shape {diff_feature_df.shape}')
             del diff_feature_df
             gc.collect()
 
-        # Clean up
-        del df, all_cols, cat_features, num_features
+        # Clean up main dataframe at the end of each feature set iteration
+        del df
         gc.collect()
 
-        print (f'feature set with prefix={prefix}, lastk={lastk} completed')
+        print(f'feature set with prefix={prefix}, lastk={lastk} completed')
 
