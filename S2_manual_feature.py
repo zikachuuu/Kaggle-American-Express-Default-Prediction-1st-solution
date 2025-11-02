@@ -180,7 +180,10 @@ for li, lastk in enumerate([None,3,6]):
         print ('----------------------------------------------------------------')
 
         # Combine train and test data for feature engineering (both sets use same features)
-        df = pd.read_feather(f"S:/ML_Project/new_data/train_data.feather").append(pd.read_feather(f"S:/ML_Project/new_data/test_data.feather")).reset_index(drop=True)
+        df = pd.concat([
+            pd.read_feather(f"S:/ML_Project/new_data/train_data.feather"),
+            pd.read_feather(f"S:/ML_Project/new_data/test_data.feather")
+        ], ignore_index=True)
 
         print ('all df shape',df.shape)
         
