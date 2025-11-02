@@ -216,8 +216,7 @@ def diff_feature(df):
 
     return df_out
 
-
-n_cpu       = 5                                    # number of parallel processes to use
+n_cpu       = 1                                    # number of parallel processes to use
 transform   = [['','rank_','ym_rank_'],[''],['']]   # feature transformations to apply
 
 # 5 different feature sets:
@@ -306,87 +305,35 @@ for li, lastk in enumerate([None,3,6]):
             print ('performing one-hot encoding for categorical features')
             df = one_hot_encoding(df,cat_features,False)
 
-
-        dfs = []
-
         # Set 1, 4
         if prefix in ['','last3_']:
-            # Create a dataframe for categorical features
             print('creating categorical features')
-            
-            cat_feature_results = []
-            for i, df_batch in enumerate(tqdm(dfs, desc='cat_feature')):
-                print(f"Processing batch {i+1}/{len(dfs)}")
-                result = cat_feature(df_batch)
-                cat_feature_results.append(result)
-                
-                # Clean up
-                del result
-                gc.collect()
-            
-            cat_feature_df = pd.concat(cat_feature_results, ignore_index=True)
-            
-            # Clean up
-            del cat_feature_results
-            gc.collect()
-            
+            cat_feature_df = cat_feature(df)
             cat_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}cat_feature.feather')
             print('categorical features saved')
+            del cat_feature_df
+            gc.collect()
 
         # set 1, 2, 3, 4, 5
         if prefix in ['','last3_','last6_','rank_','ym_rank_']:
-            print ('creating numerical features')
-
-            num_feature_results = []
-            for i, df_batch in enumerate(tqdm(dfs, desc='num_feature')):
-                print(f"Processing batch {i+1}/{len(dfs)}")
-                result = num_feature(df_batch)
-                num_feature_results.append(result)
-                
-                # Clean up
-                del result
-                gc.collect()
-
-            num_feature_df = pd.concat(num_feature_results, ignore_index=True) 
-
-            # Clean up
-            del num_feature_results
-            gc.collect()
-
+            print('creating numerical features')
+            num_feature_df = num_feature(df)
             num_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}num_feature.feather')
-            print ('numerical features saved')
+            print('numerical features saved')
+            del num_feature_df
+            gc.collect()
 
         # set 1, 4
         if prefix in ['','last3_']:
-            print ('creating difference features')
-            
-            diff_feature_results = []
-            for i, df_batch in enumerate(tqdm(dfs, desc='diff_feature')):
-                print(f"Processing batch {i+1}/{len(dfs)}")
-                result = diff_feature(df_batch)
-                diff_feature_results.append(result)
-                
-                # Clean up
-                del result
-                gc.collect()
-            
-            diff_feature_df = pd.concat(diff_feature_results, ignore_index=True)
-
-            # Clean up
-            del diff_feature_results
-            gc.collect()
-
+            print('creating difference features')
+            diff_feature_df = diff_feature(df)
             diff_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}diff_feature.feather')
-            print ('difference features saved')
+            print('difference features saved')
+            del diff_feature_df
+            gc.collect()
 
         # Clean up
         del df, all_cols, cat_features, num_features
-        if 'cat_feature_df' in locals():
-            del cat_feature_df
-        if 'num_feature_df' in locals():
-            del num_feature_df
-        if 'diff_feature_df' in locals():
-            del diff_feature_df
         gc.collect()
 
         print (f'feature set with prefix={prefix}, lastk={lastk} completed')
