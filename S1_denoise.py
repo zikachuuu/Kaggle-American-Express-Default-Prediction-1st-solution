@@ -22,10 +22,9 @@ def denoise_chunk(df):
     
     # For all columns except customer_ID, S_2 (date), D_63, and D64, multiply by 100 and floor the values
     # This reduces noise by removing decimal precision
-    # and saves memory by converting to int16
     for col in df.columns:
         if col not in ['customer_ID','S_2','D_63','D_64']:
-            df[col] = np.floor(df[col]*100).astype(np.int16)
+            df[col] = np.floor(df[col]*100)
     return df
 
 def process_split_files(input_folder, output_file):
