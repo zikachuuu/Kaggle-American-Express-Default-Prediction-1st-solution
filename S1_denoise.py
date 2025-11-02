@@ -64,8 +64,8 @@ def process_split_files(input_folder, output_file):
 
 # Process train data
 print("Processing train data...")
-process_split_files(r"/S:/ML_Project/amex-default-prediction/train_data_splitted/", r"/S:/ML_Project/new_data/train_data.feather")
+process_split_files(r"S:/ML_Project/amex-default-prediction/train_data_splitted/", r"S:/ML_Project/new_data/train_data.feather")
 
 # Process test data
 print("\nProcessing test data...")
-process_split_files(r"/S:/ML_Project/amex-default-prediction/test_data_splitted/", r"/S:/ML_Project/new_data/test_data.feather")
+process_split_files(r"S:/ML_Project/amex-default-prediction/test_data_splitted/", r"S:/ML_Project/new_data/test_data.feather")

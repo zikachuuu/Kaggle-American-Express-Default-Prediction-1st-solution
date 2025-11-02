@@ -1,0 +1,148 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Byte-compiled / optimized / DLL files
+*.so
+
+# C extensions
+*.pyd
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.env
+.venv/
+venv/
+env/
+ENV/
+venv.bak/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.nbconvert.ipynb
+profile_default/
+ipython_config.py
+
+# JupyterLab workspace
+.jupyter/
+.lab/
+
+# Notebook checkpoints (VSCode, Jupyter)
+**/.ipynb_checkpoints
+
+# Logs and reports
+*.log
+logs/
+reports/
+
+# Data and datasets (Kaggle / local)
+data/
+raw/
+processed/
+external/
+datasets/
+*.csv
+*.tsv
+*.parquet
+*.feather
+
+# Models and artifacts
+models/
+checkpoints/
+outputs/
+submissions/
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.tflite
+*.pkl
+*.joblib
+*.sav
+
+# MLflow, WandB, TensorBoard, AzureML, SageMaker
+mlruns/
+wandb/
+.sagemaker/
+.azureml/
+tb_logs/
+tensorboard/
+
+# Secrets and config
+*.env
+.env.*
+secrets.*
+credentials
+aws_credentials
+*.pem
+*.key
+
+# Docker
+*.img
+.docker/
+docker-compose.override.yml
+
+# pytest
+.cache/
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+
+# coverage
+.coverage
+htmlcov/
+.coverage.*
+
+# packaging
+manifest.in
+
+# OneDrive lock/temp files
+~$*
+~*.tmp
+
+# Windows Thumbs/database
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*~ 
+~$*
+
+# Misc
+coverage.xml
+htmlcov/
+.idea/
+.vs/
+
+# Project-specific (untracked large files)
+# Uncomment if you keep large artifacts in project root
+# *.zip
+# *.tar.gz
