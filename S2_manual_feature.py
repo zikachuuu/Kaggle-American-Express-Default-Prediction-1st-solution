@@ -51,9 +51,7 @@ def one_hot_encoding(df, cat_features, drop=False):
             # Get dummies with ALL categories (not just ones in this chunk)
             dummies = pd.get_dummies(
                 df_chunk[col], 
-                prefix=f'oneHot_{col}',
-                # dtype=np.float32,  # Use float32 to save memory
-                sparse=True        # Use sparse format for efficiency
+                prefix=f'oneHot_{col}',     
             )
             
             # Ensure all expected columns exist (fill missing with 0)
