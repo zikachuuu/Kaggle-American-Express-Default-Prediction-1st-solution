@@ -259,7 +259,7 @@ for li, lastk in enumerate([None,3,6]):
         print ('NaNs in S_ and P_ columns filled')
 
 
-        unique_customers    = df['customer_ID'].nunique()
+        unique_customers    = df['customer_ID'].unique()
         n_customers         = len(unique_customers)
         chunk_size          = 100_000  # Adjust based on your memory
         n_chunks            = int(np.ceil(n_customers / chunk_size))
