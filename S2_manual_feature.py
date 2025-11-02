@@ -307,17 +307,7 @@ for li, lastk in enumerate([None,3,6]):
             df = one_hot_encoding(df,cat_features,False)
 
 
-        # Split dataframe into n_cpu batches for parallel processing (1 CPU core per batch)
-        vc = df['customer_ID'].value_counts(sort=False).cumsum()
-        batch_size = int(np.ceil(len(vc) / n_cpu))
         dfs = []
-        start = 0
-        for i in range(min(n_cpu,int(np.ceil(len(vc) / batch_size)))):
-            vc_ = vc[i*batch_size:(i+1)*batch_size]
-            dfs.append(df[start:vc_[-1]])
-            start = vc_[-1]
-
-        pool = ThreadPool(n_cpu)
 
         # Set 1, 4
         if prefix in ['','last3_']:
@@ -389,4 +379,15 @@ for li, lastk in enumerate([None,3,6]):
             diff_feature_df.to_feather(f'S:/ML_Project/new_data/input/{prefix}diff_feature.feather')
             print ('difference features saved')
 
-        pool.close()
+        # Clean up
+        del df, all_cols, cat_features, num_features
+        if 'cat_feature_df' in locals():
+            del cat_feature_df
+        if 'num_feature_df' in locals():
+            del num_feature_df
+        if 'diff_feature_df' in locals():
+            del diff_feature_df
+        gc.collect()
+
+        print (f'feature set with prefix={prefix}, lastk={lastk} completed')
+
