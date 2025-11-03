@@ -3,11 +3,35 @@ This script performs manual feature engineering on the American Express Default 
 
 It considers 3 different transformation types and 3 different temporal windows
 Transformation types:
-    - Raw features
-    - Within customer ranking: for each feature of one customer, rank each value among his own history (as percentile, with min as 0 and max as 1)
-    - Cross customer monthly ranking: for each feature, within each month, rank each customer's value among all customers that month (as percentile, with min as 0 and max as 1)
+    - No transform (Raw features)
+    - rank transform (Within customer ranking): for each feature of one customer, rank each value among his own history 
+                                                (as percentile, with min as 0 and max as 1)
+    - ym_rank transform (Cross customer monthly ranking): for each feature, within each month, rank each customer's value among all customers that month 
+                                                          (as percentile, with min as 0 and max as 1)
 
-- Full history, last 3 months, last 6 months
+Temporal windows:
+    - Full history
+    - last 3 months
+    - last 6 months
+ 
+It creates 5 different feature sets based on these combinations:
+    - Full history  , no transform
+    - Full history  , rank transform
+    - Full history  , ym_rank transform
+    - Last 3 months , no transform
+    - Last 6 months , no transform
+
+It generates output 9 feather files:
+    - cat_feature           : categorical features aggregated by customer_ID
+    - diff_feature          : difference features aggregated by customer_ID
+    - last3_cat_feature     : categorical features from last 3 months aggregated by customer_ID
+    - last3_diff_feature    : difference features from last 3 months aggregated by customer_ID
+    - last3_num_feature     : numerical features from last 3 months aggregated by customer_ID
+    - last6_num_feature     : numerical features from last 6 months aggregated by customer_ID
+    - num_feature           : numerical features aggregated by customer_ID
+
+    - rank_num_feature      : rank transformed numerical features aggregated by customer_ID
+    - ym_rank_num_feature   : ym_rank transformed numerical features aggregated by customer_ID
 """
 
 import warnings
@@ -321,6 +345,8 @@ for li, lastk in enumerate(lastks):
             df = pd.concat(rank_chunks, ignore_index=False)
             del rank_chunks
             gc.collect()
+
+            num_features = [f'rank_{col}' for col in num_features]  # update num_features to the new ranked columns
             
             print(f"Rank transformation completed: shape {df.shape}")
 
@@ -358,6 +384,8 @@ for li, lastk in enumerate(lastks):
             df = pd.concat(rank_chunks, ignore_index=False)
             del rank_chunks
             gc.collect()
+
+            num_features = [f'ym_rank_{col}' for col in num_features]  # update num_features to the new ym_ranked columns
             
             print(f"Rank transformation completed: shape {df.shape}")
 
