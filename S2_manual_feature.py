@@ -29,7 +29,6 @@ It generates output 9 feather files:
     - last3_num_feature     : numerical features from last 3 months aggregated by customer_ID
     - last6_num_feature     : numerical features from last 6 months aggregated by customer_ID
     - num_feature           : numerical features aggregated by customer_ID
-
     - rank_num_feature      : rank transformed numerical features aggregated by customer_ID
     - ym_rank_num_feature   : ym_rank transformed numerical features aggregated by customer_ID
 """
@@ -49,8 +48,17 @@ import gc
 
 def one_hot_encoding(df, cat_features, drop=False):
     """
-    One-hot encode specified categorical columns in-place and return the augmented DataFrame.
-    New columns are named with the prefix 'oneHot_' followed by the original column name.
+    Purpose: Convert categorical variables into binary (0/1) columns.
+
+    What it does:
+        - Takes categorical columns like B_30 which might have values ['A', 'B', 'C']
+        - Creates new columns: oneHot_B_30_A, oneHot_B_30_B, oneHot_B_30_C
+        - Each row gets a 1 in the column matching its category, 0 elsewhere
+        - Processes in chunks (1M rows at a time) to avoid memory overflow
+    
+    Key trick: Collects ALL unique categories first, then ensures every chunk has the same columns 
+                (even if some categories don't appear in that chunk)
+    
     If drop is True, the original categorical columns are dropped after encoding.
     """
     # First pass: get all unique categories across the entire dataset
@@ -119,17 +127,25 @@ def one_hot_encoding(df, cat_features, drop=False):
 
 def cat_feature(df):
     """
-    For one hot encoded categorical features (with prefix 'oneHot_'), aggregate them by customer_ID using
-        - mean, std, sum, and last (if full history ie set 1, 2, 3)
-        - mean, std, sum (if lastk is set ie set 4, 5)
+    Purpose: Collapse multiple rows per customer into a single row with summary statistics.
 
-    For original categorical features, aggregate them by customer_ID using
-        - last, nunique (if full history ie set 1, 2, 3)
-        - nunique (if lastk is set ie set 4, 5)  
+    What it does:
 
-    Additionally, add a count of records per customer using the S_2 (date) column.
+    For one-hot encoded features (columns with oneHot_ prefix):
+        - Calculates: mean, std, sum, last (if full history)
+        - Example: If customer has 5 statements where oneHot_B_30_A = [1, 0, 1, 1, 0]:
+            - oneHot_B_30_A_mean = 0.6 (60% of statements had category A)
+            - oneHot_B_30_A_sum = 3 (category A appeared 3 times)
+            - oneHot_B_30_A_last = 0 (most recent statement was NOT category A)
+    For original categorical features:
+        - Calculates: last, nunique (number of unique values)
+        - Example: If customer's B_30 = ['A', 'B', 'A', 'A', 'C']:
+            - B_30_last = 'C' (most recent category)
+            - B_30_nunique = 3 (used 3 different categories over time)
+    Record count:
+        - S_2_count: How many monthly statements this customer has
 
-    Return a DataFrame with aggregated categorical features per customer (one row per customer).
+    Result: One row per customer with aggregated categorical behavior.
     """
     # collect one-hot encoded columns
     one_hot_features = [col for col in df.columns if 'oneHot' in col]
@@ -248,7 +264,7 @@ def diff_feature(df):
 # transform   = [['','rank_','ym_rank_'],[''],['']]   # feature transformations to apply
 # lastks      = [None,3,6]                            # temporal windowing (None = full history, else last k months)
 
-transform   = [['rank_', 'ym_rank']]   # feature transformations to apply
+transform   = [['ym_rank_']]   # feature transformations to apply
 lastks      = [None]                            # temporal windowing (None = full history, else last k months)
 
 # 5 different feature sets:
