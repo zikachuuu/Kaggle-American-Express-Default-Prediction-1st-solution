@@ -1,8 +1,13 @@
 """
 This script performs manual feature engineering on the American Express Default Prediction dataset.
 
-9 different feature sets are created by varying the temporal window (full history vs last 3 or 6 months)
-    and applying rank-based transformations.
+It considers 3 different transformation types and 3 different temporal windows
+Transformation types:
+    - Raw features
+    - Within customer ranking: for each feature of one customer, rank each value among his own history (as percentile, with min as 0 and max as 1)
+    - Cross customer monthly ranking: for each feature, within each month, rank each customer's value among all customers that month (as percentile, with min as 0 and max as 1)
+
+- Full history, last 3 months, last 6 months
 """
 
 import warnings
@@ -305,6 +310,8 @@ for li, lastk in enumerate(lastks):
                 
                 # Perform rank transformation on this chunk
                 ranked_chunk = df_chunk.groupby('customer_ID')[num_features].rank(pct=True).add_prefix('rank_')
+                # add back customer_ID
+                ranked_chunk.insert (0, 'customer_ID', df_chunk['customer_ID'].values)
                 rank_chunks.append(ranked_chunk)
                 
                 del df_chunk, ranked_chunk
@@ -340,6 +347,8 @@ for li, lastk in enumerate(lastks):
                 
                 # Perform rank transformation on this chunk
                 ranked_chunk = df_chunk.groupby(['customer_ID','year_month'])[num_features].rank(pct=True).add_prefix('ym_rank_')
+                # add back customer_ID
+                ranked_chunk.insert (0, 'customer_ID', df_chunk['customer_ID'].values)
                 rank_chunks.append(ranked_chunk)
                 
                 del df_chunk, ranked_chunk
