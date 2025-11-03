@@ -22,15 +22,15 @@ It creates 5 different feature sets based on these combinations:
     - Last 6 months , no transform
 
 It generates output 9 feather files:
-    - cat_feature           : categorical features aggregated by customer_ID
-    - diff_feature          : difference features aggregated by customer_ID
-    - last3_cat_feature     : categorical features from last 3 months aggregated by customer_ID
-    - last3_diff_feature    : difference features from last 3 months aggregated by customer_ID
-    - last3_num_feature     : numerical features from last 3 months aggregated by customer_ID
-    - last6_num_feature     : numerical features from last 6 months aggregated by customer_ID
-    - num_feature           : numerical features aggregated by customer_ID
-    - rank_num_feature      : rank transformed numerical features aggregated by customer_ID
-    - ym_rank_num_feature   : ym_rank transformed numerical features aggregated by customer_ID
+    - cat_feature           :                       categorical features                    aggregated by customer_ID
+    - diff_feature          :                       difference features                     aggregated by customer_ID
+    - last3_cat_feature     :                       categorical features from last 3 months aggregated by customer_ID
+    - last3_diff_feature    :                       difference features  from last 3 months aggregated by customer_ID
+    - last3_num_feature     :                       numerical features   from last 3 months aggregated by customer_ID
+    - last6_num_feature     :                       numerical features   from last 6 months aggregated by customer_ID
+    - num_feature           :                       numerical features                      aggregated by customer_ID
+    - rank_num_feature      : rank transformed      numerical features                      aggregated by customer_ID
+    - ym_rank_num_feature   : ym_rank transformed   numerical features                      aggregated by customer_ID
 """
 
 import warnings
@@ -125,6 +125,7 @@ def one_hot_encoding(df, cat_features, drop=False):
     
     return df
 
+
 def cat_feature(df):
     """
     Purpose: Collapse multiple rows per customer into a single row with summary statistics.
@@ -181,25 +182,28 @@ def cat_feature(df):
 
 def num_feature(df):
     """
-    Aggregate numerical features by `customer_ID`.
+    Purpose: Summarize numerical columns per customer.
 
-    Behavior
-    - If the first entry in the `num_features` global list starts with
-      'rank_', this function only computes the 'last' aggregation (the latest
-      rank). This supports the transformed features created by ranking
-      operations.
-    - Otherwise, compute standard aggregations: mean, std, min, max, sum, and
-      optionally 'last' when `lastk` is None (full history) or omit 'last' for
-      truncated histories.
-    - After aggregation (except for rank_ features), the function scales values
-      by flooring division with 0.01: `val = val // 0.01`. This appears to be
-      intended as a coarse quantization to reduce cardinality / memory.
+    What it does:
 
+    Normal case (raw features like S_3, P_2):
+        - Calculates: mean, std, min, max, sum, last
+        - Example: If customer's S_3 = [100, 150, 200, 180, 220]:
+            - S_3_mean = 170
+            - S_3_max = 220
+            - S_3_last = 220 (most recent value)
+        - Quantization: Divides all values by 0.01 and floors them (// 0.01)
+            - This converts 170.456 → 17045 (reduces precision, saves memory)
+
+    Rank transformed features (eg rank_S_3):
+        - Only keeps last (the most recent percentile rank)
+        - No quantization applied (ranks are already 0-1 scaled)
+
+    Result: One row per customer with statistical summaries of their numerical behavior.
     """
     # When the features are already rank_* style we only keep the last value
     if num_features[0][:5] == 'rank_':
         num_agg_df = df.groupby("customer_ID", sort=False)[num_features].agg(['last'])
-        print('only last for rank features')
     else:
         if lastk is None:
             num_agg_df = df.groupby("customer_ID", sort=False)[num_features].agg(['mean', 'std', 'min', 'max', 'sum', 'last'])
@@ -222,18 +226,21 @@ def num_feature(df):
 
 def diff_feature(df):
     """
-    Create features based on the difference between consecutive rows for each
-    customer's time series and aggregate those differences by customer.
+    Purpose: Capture trends and changes over time.
 
-    Behavior
-    - Computes group-wise difference: for each `customer_ID`, the difference of
-      each numeric column relative to the previous row is computed: df.groupby(...).diff()
-    - The resulting columns are prefixed with 'diff_'. These difference
-      columns are then aggregated per customer with ['mean','std','min','max','sum']
-      and optionally 'last' when `lastk` is None.
-    - After aggregation the values are quantized by floor-division with 0.01
-      to match the original script behaviour.
+    What it does:
 
+        - Computes month-to-month differences for each numerical column
+        - Example: If customer's S_3 = [100, 150, 200, 180, 220]:
+            - diff_S_3 = [NaN, 50, 50, -20, 40] (changes between consecutive months)
+        - Then aggregates these differences: mean, std, min, max, sum, last
+            - diff_S_3_mean = 30 (average monthly change)
+            - diff_S_3_min = -20 (biggest drop)
+            - diff_S_3_last = 40 (most recent change)
+
+    Why useful: Detects deteriorating payment behavior (increasing debt) vs improving behavior (paying down balances).
+
+    Quantization: Same as num_feature (floor division by 0.01).
     """
     # names for the diffed columns (used after computing groupwise differences)
     diff_num_features = [f'diff_{col}' for col in num_features]
@@ -388,7 +395,8 @@ for li, lastk in enumerate(lastks):
                 print(f"Ranking chunk {chunk_idx}/{n_chunks}: {len(chunk_customers):,} customers, {len(df_chunk):,} rows")
                 
                 # Perform rank transformation on this chunk
-                ranked_chunk = df_chunk.groupby(['customer_ID','year_month'])[num_features].rank(pct=True).add_prefix('ym_rank_')
+                df_chunk['ym'] = df_chunk['S_2'].apply (lambda x:x[:7]) # extract year-month from date
+                ranked_chunk = df_chunk.groupby('ym')[num_features].rank(pct=True).add_prefix('ym_rank_')
                 # add back customer_ID
                 ranked_chunk.insert (0, 'customer_ID', df_chunk['customer_ID'].values)
                 rank_chunks.append(ranked_chunk)
