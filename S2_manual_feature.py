@@ -219,8 +219,8 @@ def diff_feature(df):
 # transform   = [['','rank_','ym_rank_'],[''],['']]   # feature transformations to apply
 # lastks      = [None,3,6]                            # temporal windowing (None = full history, else last k months)
 
-transform   = [[''],['']]   # feature transformations to apply
-lastks      = [3,6]                            # temporal windowing (None = full history, else last k months)
+transform   = [['rank_', 'ym_rank']]   # feature transformations to apply
+lastks      = [None]                            # temporal windowing (None = full history, else last k months)
 
 # 5 different feature sets:
 #   1. All data            (lastk=None), no transform      (prefix='')
