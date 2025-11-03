@@ -216,7 +216,11 @@ def diff_feature(df):
 
     return df_out
 
-transform   = [['','rank_','ym_rank_'],[''],['']]   # feature transformations to apply
+# transform   = [['','rank_','ym_rank_'],[''],['']]   # feature transformations to apply
+# lastks      = [None,3,6]                            # temporal windowing (None = full history, else last k months)
+
+transform   = [[''],['']]   # feature transformations to apply
+lastks      = [3,6]                            # temporal windowing (None = full history, else last k months)
 
 # 5 different feature sets:
 #   1. All data            (lastk=None), no transform      (prefix='')
@@ -225,7 +229,7 @@ transform   = [['','rank_','ym_rank_'],[''],['']]   # feature transformations to
 #   4. Last 3 months data  (lastk=3)   , no transform      (prefix='last3_')
 #   5. Last 6 months data  (lastk=6)   , no transform      (prefix='last6_')
 
-for li, lastk in enumerate([None,3,6]):
+for li, lastk in enumerate(lastks):
     for prefix in transform[li]:
         # We iterate over each of the 5 feature sets
         print ('----------------------------------------------------------------')
